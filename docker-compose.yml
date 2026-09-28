@@ -12,7 +12,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      # Ubah port luar ke 5433 agar tidak bentrok dengan PostgreSQL bawaan OS VPS
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U k12_admin -d siakad_db"]
       interval: 3s
