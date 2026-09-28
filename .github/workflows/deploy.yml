@@ -1,0 +1,37 @@
+name: Auto Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Eksekusi Perintah Deployment via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            if [ -d "$HOME/edupass-k12" ]; then
+              cd "$HOME/edupass-k12"
+            elif [ -d "/root/edupass-k12" ]; then
+              cd "/root/edupass-k12"
+            else
+              echo "Folder edupass-k12 belum ada di VPS!"
+              exit 1
+            fi
+
+            echo "Menarik update terbaru dari GitHub..."
+            git pull origin main
+
+            echo "Memperbarui container Docker..."
+            docker compose up -d --build
+
+            echo "Deployment ke VPS Selesai dan Berhasil!"
