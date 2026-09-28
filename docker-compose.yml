@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Database Utama (PostgreSQL 16)
+  postgres:
+    image: postgres:16-alpine
+    container_name: edupass_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: k12_admin
+      POSTGRES_PASSWORD: PasswordK12Aman2026!
+      POSTGRES_DB: siakad_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - edupass_network
+
+  # Identity Provider Terpusat (Keycloak 24+) dengan Auto-Import Realm
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: edupass_keycloak
+    restart: unless-stopped
+    command: start-dev --proxy edge --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/siakad_db
+      KC_DB_USERNAME: k12_admin
+      KC_DB_PASSWORD: PasswordK12Aman2026!
+      KC_DB_SCHEMA: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: SuperAdminKeycloak2026!
+      KC_HTTP_RELATIVE_PATH: /auth
+    volumes:
+      - ./keycloak/k12-portal-realm.json:/opt/keycloak/data/import/k12-portal-realm.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - edupass_network
+
+  # Redis Cache & Antrean Notifikasi WhatsApp
+  redis:
+    image: redis:7-alpine
+    container_name: edupass_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - edupass_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  edupass_network:
+    driver: bridge

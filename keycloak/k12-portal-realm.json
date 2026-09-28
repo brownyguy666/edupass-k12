@@ -1,0 +1,178 @@
+{
+  "id": "k12-portal",
+  "realm": "k12-portal",
+  "displayName": "Portal Satu Pintu K-12 SMP",
+  "displayNameHtml": "<b>Portal Satu Pintu</b> SMP",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "SUPER_ADMIN",
+        "description": "Administrator Utama IT Sistem Sekolah"
+      },
+      {
+        "name": "STAFF_TU",
+        "description": "Staf Tata Usaha & Operator Akademik SMP"
+      },
+      {
+        "name": "GURU",
+        "description": "Guru Mata Pelajaran"
+      },
+      {
+        "name": "WALI_KELAS",
+        "description": "Guru Wali Kelas 7, 8, atau 9"
+      },
+      {
+        "name": "SISWA",
+        "description": "Siswa SMP Aktif"
+      },
+      {
+        "name": "WALI_MURID",
+        "description": "Orang Tua / Wali Murid"
+      }
+    ]
+  },
+  "defaultRoles": [
+    "SISWA"
+  ],
+  "clients": [
+    {
+      "clientId": "k12-web-portal",
+      "name": "K-12 One-Stop Web Portal (Next.js)",
+      "description": "Frontend Web Portal Satu Pintu",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "k12-web-secret-super-secure-key-2026",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "rootUrl": "http://localhost:3000",
+      "baseUrl": "http://localhost:3000",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:3000/api/auth/callback/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "+"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        },
+        {
+          "name": "phone-number-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "user.attribute": "phoneNumber",
+            "claim.name": "phone_number",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@sekolah.sch.id",
+      "firstName": "Super",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "SUPER_ADMIN"
+      ]
+    },
+    {
+      "username": "guru.budi",
+      "enabled": true,
+      "email": "budi.santoso@sekolah.sch.id",
+      "firstName": "Budi",
+      "lastName": "Santoso, S.Pd.",
+      "attributes": {
+        "phoneNumber": ["081234567890"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Guru123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "GURU",
+        "WALI_KELAS"
+      ]
+    },
+    {
+      "username": "0081234567",
+      "enabled": true,
+      "email": "siswa.ahmad@sekolah.sch.id",
+      "firstName": "Ahmad",
+      "lastName": "Fauzan",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Siswa123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "SISWA"
+      ]
+    },
+    {
+      "username": "081987654321",
+      "enabled": true,
+      "email": "wali.ahmad@gmail.com",
+      "firstName": "Hendra",
+      "lastName": "Fauzan (Wali)",
+      "attributes": {
+        "phoneNumber": ["081987654321"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Wali123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "WALI_MURID"
+      ]
+    }
+  ]
+}

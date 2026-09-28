@@ -1,0 +1,361 @@
+// datasource & generator
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --------------------------------------------------------------------------
+// 1. PENGGUNA & IDENTITY (TERHUBUNG KE KEYCLOAK SSO)
+// --------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  STAFF_TU
+  GURU
+  WALI_KELAS
+  SISWA
+  WALI_MURID
+}
+
+enum JenisKelamin {
+  LAKI_LAKI
+  PEREMPUAN
+}
+
+enum StatusKehadiran {
+  HADIR
+  TERLAMBAT
+  SAKIT
+  IZIN
+  ALPA
+}
+
+enum MetodePresensi {
+  RFID_CARD
+  QR_SCAN
+  GEOFENCE_GPS
+  MANUAL_GURU
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  ssoUserId     String    @unique @db.VarChar(64) // UUID Sub dari Keycloak
+  username      String    @unique @db.VarChar(100) // NISN (Siswa) / NIP (Guru) / No WA (Wali)
+  email         String?   @unique @db.VarChar(150)
+  phoneNumber   String?   @db.VarChar(20)
+  role          Role
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relasi Profil Spesifik
+  guruProfile   Guru?
+  siswaProfile  Siswa?
+  waliProfile   WaliMurid?
+
+  @@index([ssoUserId])
+  @@map("users")
+}
+
+// --------------------------------------------------------------------------
+// 2. MASTER DATA SEKOLAH & AKADEMIK SMP (FASE D)
+// --------------------------------------------------------------------------
+
+model Sekolah {
+  id              String         @id @default(uuid()) @db.Uuid
+  npsn            String         @unique @db.VarChar(10)
+  namaSekolah     String         @db.VarChar(150)
+  jenjang         String         @default("SMP") @db.VarChar(10)
+  alamat          String         @db.Text
+  // Koordinat Geofencing Presensi Siswa/Guru
+  latitude        Decimal        @db.Decimal(10, 8)
+  longitude       Decimal        @db.Decimal(11, 8)
+  radiusMeter     Int            @default(50) // Toleransi radius presensi (meter)
+  tahunAjaranList TahunAjaran[]
+
+  @@map("sekolah")
+}
+
+model TahunAjaran {
+  id            String      @id @default(uuid()) @db.Uuid
+  sekolahId     String      @db.Uuid
+  nama          String      @db.VarChar(20) // Contoh: "2026/2027"
+  isActive      Boolean     @default(false)
+  sekolah       Sekolah     @relation(fields: [sekolahId], references: [id], onDelete: Cascade)
+  semesterList  Semester[]
+
+  @@unique([sekolahId, nama])
+  @@map("tahun_ajaran")
+}
+
+enum TipeSemester {
+  GANJIL
+  GENAP
+}
+
+model Semester {
+  id             String        @id @default(uuid()) @db.Uuid
+  tahunAjaranId  String        @db.Uuid
+  tipe           TipeSemester
+  tanggalMulai   DateTime      @db.Date
+  tanggalSelesai DateTime      @db.Date
+  isActive       Boolean       @default(false)
+  tahunAjaran    TahunAjaran   @relation(fields: [tahunAjaranId], references: [id], onDelete: Cascade)
+  rombelList     Rombel[]
+
+  @@unique([tahunAjaranId, tipe])
+  @@map("semester")
+}
+
+// Rombongan Belajar (Kelas 7, 8, 9 SMP - Fase D)
+model Rombel {
+  id             String          @id @default(uuid()) @db.Uuid
+  semesterId     String          @db.Uuid
+  waliKelasId    String?         @db.Uuid
+  tingkat        Int             // 7, 8, atau 9 (Fase D SMP)
+  namaRombel     String          @db.VarChar(30) // Contoh: "7A", "8-Unggulan", "9C"
+  kurikulum      String          @default("Kurikulum Merdeka - Fase D") @db.VarChar(100)
+
+  semester       Semester        @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  waliKelas      Guru?           @relation(fields: [waliKelasId], references: [id], onDelete: SetNull)
+  anggotaRombel  AnggotaRombel[]
+  pembelajaran   Pembelajaran[]
+
+  @@unique([semesterId, namaRombel])
+  @@map("rombel")
+}
+
+// --------------------------------------------------------------------------
+// 3. CIVITAS: GURU, SISWA, DAN WALI MURID
+// --------------------------------------------------------------------------
+
+model Guru {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @unique @db.Uuid
+  nip             String?         @unique @db.VarChar(30)
+  nuptk           String?         @unique @db.VarChar(30)
+  namaLengkap     String          @db.VarChar(150)
+  gelarDepan      String?         @db.VarChar(20)
+  gelarBelakang   String?         @db.VarChar(20)
+  jenisKelamin    JenisKelamin
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  rombelWaliKelas Rombel[]
+  pembelajaran    Pembelajaran[]
+  sesiPresensi    PresensiSesiKelas[]
+
+  @@map("guru")
+}
+
+model Siswa {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @unique @db.Uuid
+  nisn            String          @unique @db.VarChar(10) // 10 Digit NISN
+  nisLokal        String?         @db.VarChar(20)
+  namaLengkap     String          @db.VarChar(150)
+  jenisKelamin    JenisKelamin
+  tempatLahir     String          @db.VarChar(50)
+  tanggalLahir    DateTime        @db.Date
+  rfidCardUid     String?         @unique @db.VarChar(50) // Kartu Pelajar RFID di gerbang
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  anggotaRombel   AnggotaRombel[]
+  waliRelasi      SiswaWaliRelasi[]
+  presensiHarian  PresensiHarian[]
+  presensiKelas   PresensiKelasDetail[]
+
+  @@index([nisn])
+  @@index([rfidCardUid])
+  @@map("siswa")
+}
+
+enum StatusSiswaRombel {
+  AKTIF
+  MUTASI_KELUAR
+  LULUS
+}
+
+model AnggotaRombel {
+  id          String            @id @default(uuid()) @db.Uuid
+  rombelId    String            @db.Uuid
+  siswaId     String            @db.Uuid
+  nomorAbsen  Int
+  status      StatusSiswaRombel @default(AKTIF)
+
+  rombel      Rombel            @relation(fields: [rombelId], references: [id], onDelete: Cascade)
+  siswa       Siswa             @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+
+  @@unique([rombelId, siswaId])
+  @@unique([rombelId, nomorAbsen])
+  @@map("anggota_rombel")
+}
+
+enum HubunganWali {
+  AYAH_KANDUNG
+  IBU_KANDUNG
+  WALI
+}
+
+model WaliMurid {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @unique @db.Uuid
+  namaLengkap     String            @db.VarChar(150)
+  noWhatsApp      String            @db.VarChar(20)
+  alamat          String?           @db.Text
+  pekerjaan       String?           @db.VarChar(100)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  anakAsuh        SiswaWaliRelasi[]
+  notifikasiLog   NotifikasiWhatsAppLog[]
+
+  @@map("wali_murid")
+}
+
+model SiswaWaliRelasi {
+  id             String       @id @default(uuid()) @db.Uuid
+  siswaId        String       @db.Uuid
+  waliMuridId    String       @db.Uuid
+  hubungan       HubunganWali
+  isWaliUtama    Boolean      @default(true) // Wali utama penerima notifikasi WA
+
+  siswa          Siswa        @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+  waliMurid      WaliMurid    @relation(fields: [waliMuridId], references: [id], onDelete: Cascade)
+
+  @@unique([siswaId, waliMuridId])
+  @@map("siswa_wali_relasi")
+}
+
+// --------------------------------------------------------------------------
+// 4. MATA PELAJARAN & JADWAL SMP (KURIKULUM MERDEKA)
+// --------------------------------------------------------------------------
+
+model MataPelajaran {
+  id             String          @id @default(uuid()) @db.Uuid
+  kodeMapel      String          @unique @db.VarChar(20) // Misal: IPA-SMP, MAT-SMP, INF-SMP
+  namaMapel      String          @db.VarChar(100)
+  alokasiJpSem   Int             // Alokasi Jam Pelajaran per semester
+  pembelajaran   Pembelajaran[]
+
+  @@map("mata_pelajaran")
+}
+
+model Pembelajaran {
+  id              String          @id @default(uuid()) @db.Uuid
+  rombelId        String          @db.Uuid
+  mataPelajaranId String          @db.Uuid
+  guruId          String          @db.Uuid
+
+  rombel          Rombel          @relation(fields: [rombelId], references: [id], onDelete: Cascade)
+  mataPelajaran   MataPelajaran   @relation(fields: [mataPelajaranId], references: [id], onDelete: Cascade)
+  guru            Guru            @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  jadwalList      JadwalPelajaran[]
+
+  @@unique([rombelId, mataPelajaranId])
+  @@map("pembelajaran")
+}
+
+enum Hari {
+  SENIN
+  SELASA
+  RABU
+  KAMIS
+  JUMAT
+  SABTU
+}
+
+model JadwalPelajaran {
+  id             String              @id @default(uuid()) @db.Uuid
+  pembelajaranId String              @db.Uuid
+  hari           Hari
+  jamKeMulai     Int                 // Jam ke-1 (misal 07.00)
+  jamKeSelesai   Int                 // Jam ke-2 (misal 08.20)
+  jamMulai       String              @db.VarChar(5) // "07:00"
+  jamSelesai     String              @db.VarChar(5) // "08:20"
+  ruangan        String?             @db.VarChar(30)
+
+  pembelajaran   Pembelajaran        @relation(fields: [pembelajaranId], references: [id], onDelete: Cascade)
+  sesiKelasList  PresensiSesiKelas[]
+
+  @@map("jadwal_pelajaran")
+}
+
+// --------------------------------------------------------------------------
+// 5. PRESENSI DIGITAL & LOG NOTIFIKASI WHATSAPP
+// --------------------------------------------------------------------------
+
+model PresensiHarian {
+  id                String          @id @default(uuid()) @db.Uuid
+  siswaId           String          @db.Uuid
+  tanggal           DateTime        @db.Date
+  waktuMasuk        DateTime?
+  waktuPulang       DateTime?
+  status            StatusKehadiran @default(ALPA)
+  metodeMasuk       MetodePresensi?
+  latitudeMasuk     Decimal?        @db.Decimal(10, 8)
+  longitudeMasuk    Decimal?        @db.Decimal(11, 8)
+  fotoBuktiUrl      String?         @db.Text
+  catatanKeterangan String?         @db.Text
+
+  siswa             Siswa           @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+
+  @@unique([siswaId, tanggal])
+  @@index([tanggal, status])
+  @@map("presensi_harian")
+}
+
+model PresensiSesiKelas {
+  id                String               @id @default(uuid()) @db.Uuid
+  jadwalPelajaranId String               @db.Uuid
+  guruPengajarId    String               @db.Uuid
+  tanggal           DateTime             @db.Date
+  materiAjar        String?              @db.VarChar(255)
+  jurnalGuru        String?              @db.Text
+  createdAt         DateTime             @default(now())
+
+  jadwalPelajaran   JadwalPelajaran      @relation(fields: [jadwalPelajaranId], references: [id], onDelete: Cascade)
+  guruPengajar      Guru                 @relation(fields: [guruPengajarId], references: [id], onDelete: Cascade)
+  detailKehadiran   PresensiKelasDetail[]
+
+  @@unique([jadwalPelajaranId, tanggal])
+  @@map("presensi_sesi_kelas")
+}
+
+model PresensiKelasDetail {
+  id          String            @id @default(uuid()) @db.Uuid
+  sesiId      String            @db.Uuid
+  siswaId     String            @db.Uuid
+  status      StatusKehadiran   @default(HADIR)
+  catatan     String?           @db.VarChar(150)
+
+  sesi        PresensiSesiKelas @relation(fields: [sesiId], references: [id], onDelete: Cascade)
+  siswa       Siswa             @relation(fields: [siswaId], references: [id], onDelete: Cascade)
+
+  @@unique([sesiId, siswaId])
+  @@map("presensi_kelas_detail")
+}
+
+enum StatusPengirimanWA {
+  PENDING
+  SENT
+  FAILED
+}
+
+model NotifikasiWhatsAppLog {
+  id             String             @id @default(uuid()) @db.Uuid
+  waliMuridId    String             @db.Uuid
+  noTujuan       String             @db.VarChar(20)
+  tipePesan      String             @db.VarChar(50)
+  isiPesan       String             @db.Text
+  status         StatusPengirimanWA @default(PENDING)
+  responseVendor String?            @db.Text
+  createdAt      DateTime           @default(now())
+
+  waliMurid      WaliMurid          @relation(fields: [waliMuridId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("notifikasi_whatsapp_log")
+}
