@@ -2,6 +2,9 @@
 -- SKEMA BASIS DATA SIAKAD & PRESENSI SMP (KURIKULUM MERDEKA) - POSTGRESQL
 -- ============================================================================
 
+-- 0. SCHEMA KHUSUS KEYCLOAK (Memisahkan tabel internal SSO dari tabel akademik)
+CREATE SCHEMA IF NOT EXISTS keycloak;
+
 -- Aktifkan ekstensi UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -202,7 +205,7 @@ CREATE TABLE notifikasi_whatsapp_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     wali_murid_id UUID NOT NULL REFERENCES wali_murid(id) ON DELETE CASCADE,
     no_tujuan VARCHAR(20) NOT NULL,
-    tipe_pesan VARCHAR(50) NOT NULL, -- 'PRESENSI_TERLAMBAT', 'PRESENSI_ALPA'
+    tipe_pesan VARCHAR(50) NOT NULL,
     isi_pesan TEXT NOT NULL,
     status status_wa_type DEFAULT 'PENDING',
     response_vendor TEXT,
