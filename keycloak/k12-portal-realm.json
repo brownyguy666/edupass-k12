@@ -4,7 +4,7 @@
   "displayName": "Portal Satu Pintu K-12 SMP",
   "displayNameHtml": "<b>Portal Satu Pintu</b> SMP",
   "enabled": true,
-  "sslRequired": "external",
+  "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
